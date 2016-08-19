@@ -1,0 +1,9 @@
+
+// load utils.gralde
+apply from: rootProject.getRootDir().getAbsolutePath() + "/utils.gradle"
+
+
+task('hello' << {
+    println "version.json is : " + getVersionCodeFromJSONFile().toString()
+    println "current branch is : " + getCurrentBranchName()
+})

@@ -1,0 +1,74 @@
+// gradle的一些工具函数
+// 作者：summer
+
+import java.util.regex.Pattern
+import groovy.json.JsonSlurper
+import java.lang.System
+
+
+// 从AndroidMainfest.xml中直接读取版本信息，因此，versionName必须是：x.x.x格式，否则会报错
+def getVersionNameFromManifest() {
+  def manifestFile = file("AndroidManifest.xml")
+  def pattern = Pattern.compile("versionName=\"(\\d+)\\.(\\d+)\\.(\\d+)\"")
+  def manifestText = manifestFile.getText()
+  def matcher = pattern.matcher(manifestText)
+  matcher.find()
+  matcher.group(1) +"." + matcher.group(2) + "." + matcher.group(3)
+}
+
+// 从version.json当中获取版本信息，并从环境变量中读取build number
+// 该version.json里面仅包含： [1,0,0,0] 单个json数组，标识四个版本号，分别是：
+// 主版本、次版本、修正版本、构建版本
+def getVersionCodeFromJSONFile(filePath='version.json') {
+    def versionFile = new File(filePath)
+    def version = new JsonSlurper().parseText(versionFile.text)
+    version[3] = System.getenv("BUILD_NUMBER") as Integer ?: version[3]
+    version
+}
+
+// 重新定义versionCode，按照原来的定义，主版本-次版本-修正版本-构建号分别为：2、2、2、4
+def androidVersionCodeFromVersionAry(v) {
+  return v[0] * 10 * 10**10 * 10000 + v[1] * 10 * 10 * 10000 + v[2] * 10 * 10000 + v[3]
+}
+
+// 判断是否允许在jenkins上，方便进行CI/CD
+// 返回true or false
+def isRunOnJenkins() {
+    if (System.getenv("JENKINS_URL") != null && System.getenv("BUILD_TAG") != null) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+// 获取当前git分支名称
+def getCurrentBranchName() {
+    def branch = ''
+    try {
+        if ( isRunOnJenkins() ) {
+          // 如果正在使用jenkins来进行CI，特别是在multi branch模式下
+          // git不能设定checkout的分支，jenkins是默认设定当前一个临时分支的
+          // 这时候，通过git rev-parse --abbrev-ref HEAD得到的分支名就是HEAD
+          branch = System.getenv("BRANCH_NAME")
+        } else {
+          def proc = "git rev-parse --abbrev-ref HEAD".execute()
+          proc.in.eachLine { line -> branch = line }
+          proc.err.eachLine { line -> println line }
+          proc.waitFor()
+        }
+    } catch (Exception e) {
+        println("getCurrentBranchName: " + e.toString())
+    }
+
+    branch
+}
+
+ext {
+  // 导出函数
+  getVersionCodeFromJSONFile = this.&getVersionCodeFromJSONFile
+  getCurrentBranchName = this.&getCurrentBranchName
+  androidVersionCodeFromVersionAry = this.&androidVersionCodeFromVersionAry
+  isRunOnJenkins = this.&isRunOnJenkins
+  getVersionNameFromManifest = this.&getVersionNameFromManifest
+}
